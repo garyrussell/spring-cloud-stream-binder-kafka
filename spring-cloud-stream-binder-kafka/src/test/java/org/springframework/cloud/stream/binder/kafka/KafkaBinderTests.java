@@ -35,8 +35,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import kafka.utils.ZKStringSerializer$;
 import kafka.utils.ZkUtils;
+
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -327,7 +329,7 @@ public class KafkaBinderTests extends
 	}
 
 	private StreamListenerMessageHandler buildStreamListener(Class<?> handlerClass,
-															 String handlerMethodName, Class<?>... parameters) throws Exception {
+								String handlerMethodName, Class<?>... parameters) throws Exception {
 		String channelName = "reply_" + System.nanoTime();
 		GenericApplicationContext context = new GenericApplicationContext();
 		context.getBeanFactory().registerSingleton(channelName, new QueueChannel());
@@ -2484,6 +2486,7 @@ public class KafkaBinderTests extends
 				consumerProperties);
 		Message<?> message = org.springframework.integration.support.MessageBuilder
 				.withPayload("testSendAndReceiveWithMixedMode".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, "application/octet-stream")
 				.setHeader("foo", "bar")
 				.build();
 		// Let the consumer actually bind to the producer before sending a msg
@@ -2525,7 +2528,7 @@ public class KafkaBinderTests extends
 		record = iterator.next();
 		value = (byte[]) record.value();
 		assertThat(value[0] & 0xff).isNotEqualTo(0xff);
-		assertThat(record.headers().toArray().length).isEqualTo(2);
+		assertThat(record.headers().toArray().length).isEqualTo(3);
 		record = iterator.next();
 		value = (byte[]) record.value();
 		assertThat(value[0] & 0xff).isNotEqualTo(0xff);
