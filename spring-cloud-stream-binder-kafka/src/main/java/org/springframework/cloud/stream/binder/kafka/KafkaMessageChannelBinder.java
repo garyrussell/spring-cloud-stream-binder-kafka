@@ -95,6 +95,7 @@ import org.springframework.util.concurrent.ListenableFutureCallback;
  * @author Soby Chacko
  * @author Henryk Konsek
  * @author Doug Saus
+ * @author Aldo Sinanaj
  */
 public class KafkaMessageChannelBinder extends
 		AbstractMessageChannelBinder<ExtendedConsumerProperties<KafkaConsumerProperties>,
@@ -354,7 +355,8 @@ public class KafkaMessageChannelBinder extends
 				public void handleMessage(Message<?> message) throws MessagingException {
 					final ConsumerRecord<?, ?> record = message.getHeaders()
 							.get(KafkaMessageDrivenChannelAdapter.KAFKA_RAW_DATA, ConsumerRecord.class);
-					final byte[] key = record.key() != null ? Utils.toArray(ByteBuffer.wrap((byte[]) record.key()))
+					final byte[] key = record.key() != null
+							? Utils.toArray(ByteBuffer.wrap((byte[]) record.key()))
 							: null;
 					final byte[] payload;
 					if (message.getPayload() instanceof Throwable) {
@@ -363,17 +365,22 @@ public class KafkaMessageChannelBinder extends
 
 						try {
 							MessageValues messageValues = EmbeddedHeaderUtils
-									.extractHeaders(MessageBuilder.withPayload((byte[]) record.value()).build(), true);
+									.extractHeaders(MessageBuilder.withPayload((byte[]) record.value()).build(),
+											false);
 							messageValues.put(X_ORIGINAL_TOPIC, record.topic());
 							messageValues.put(X_EXCEPTION_MESSAGE, failureMessage);
 							messageValues.put(X_EXCEPTION_STACKTRACE, getStackTraceAsString(throwable));
 
-							final String[] addedHeaders = {X_ORIGINAL_TOPIC, X_EXCEPTION_MESSAGE, X_EXCEPTION_STACKTRACE};
-							payload = EmbeddedHeaderUtils.embedHeaders(messageValues, EmbeddedHeaderUtils.headersToEmbed(addedHeaders));
-						} catch (Exception e) {
+							final String[] headersToEmbed = new ArrayList<>(messageValues.keySet()).toArray(
+									new String[messageValues.keySet().size()]);
+							payload = EmbeddedHeaderUtils.embedHeaders(messageValues,
+									EmbeddedHeaderUtils.headersToEmbed(headersToEmbed));
+						}
+						catch (Exception e) {
 							throw new RuntimeException(e);
 						}
-					} else {
+					}
+					else {
 						payload = record.value() != null
 								? Utils.toArray(ByteBuffer.wrap((byte[]) record.value())) : null;
 					}
