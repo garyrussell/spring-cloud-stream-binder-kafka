@@ -29,33 +29,48 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.cloud.stream.annotation.EnableBinding;
-import org.springframework.cloud.stream.messaging.Source;
+import org.springframework.cloud.stream.annotation.StreamListener;
+import org.springframework.cloud.stream.messaging.Processor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.KafkaNull;
 import org.springframework.kafka.test.rule.EmbeddedKafkaRule;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.support.GenericMessage;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Aldo Sinanaj
+ * @author Gary Russell
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@EnableBinding(Source.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
+	properties = "spring.cloud.stream.binding.input.destination=output")
+@EnableBinding(Processor.class)
+@DirtiesContext
 public class KafkaNullConverterTest {
 
 	private static final String KAFKA_BROKERS_PROPERTY = "spring.kafka.bootstrap-servers";
+
+	@Autowired
+	private MessageChannel output;
+
+	@Autowired
+	private MessageChannel input;
+
+	@Autowired
+	private KafkaNullConverterTestConfig config;
 
 	@ClassRule
 	public static EmbeddedKafkaRule kafkaEmbedded = new EmbeddedKafkaRule(1, true);
 
 	@BeforeClass
 	public static void setup() {
-		System.setProperty(KAFKA_BROKERS_PROPERTY, kafkaEmbedded.getEmbeddedKafka().getBrokersAsString());
+		System.setProperty(KAFKA_BROKERS_PROPERTY,
+				kafkaEmbedded.getEmbeddedKafka().getBrokersAsString());
 	}
 
 	@AfterClass
@@ -63,26 +78,43 @@ public class KafkaNullConverterTest {
 		System.clearProperty(KAFKA_BROKERS_PROPERTY);
 	}
 
-	private static CountDownLatch countDownLatch = new CountDownLatch(1);
+	@Test
+	public void testKafkaNullConverterOutput() throws InterruptedException {
+		this.output.send(new GenericMessage<>(KafkaNull.INSTANCE));
 
-	@Autowired
-	private MessageChannel output;
+		assertThat(this.config.countDownLatchOutput.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(this.config.outputPayload).isNull();
+	}
 
 	@Test
-	public void testKafkaNullConverter() throws InterruptedException {
-		output.send(new GenericMessage<>(KafkaNull.INSTANCE));
+	public void testKafkaNullConverterInput() throws InterruptedException {
+		this.input.send(new GenericMessage<>(KafkaNull.INSTANCE));
 
-		assertThat(countDownLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(this.config.countDownLatchInput.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(this.config.inputPayload).isNull();
 	}
 
 	@TestConfiguration
-	public static class KafkaMetricsTestConfig {
+	public static class KafkaNullConverterTestConfig {
+
+		final CountDownLatch countDownLatchOutput = new CountDownLatch(1);
+
+		final CountDownLatch countDownLatchInput = new CountDownLatch(1);
+
+		volatile byte[] outputPayload = new byte[0];
+
+		volatile byte[] inputPayload = new byte[0];
 
 		@KafkaListener(id = "foo", topics = "output")
 		public void listen(@Payload(required = false) byte[] in) {
-			assertThat(in).isNull();
+			this.outputPayload = in;
+			countDownLatchOutput.countDown();
+		}
 
-			countDownLatch.countDown();
+		@StreamListener(Processor.INPUT)
+		public void inputListen(@Payload(required = false) byte[] payload) {
+			this.inputPayload = payload;
+			countDownLatchInput.countDown();
 		}
 
 	}

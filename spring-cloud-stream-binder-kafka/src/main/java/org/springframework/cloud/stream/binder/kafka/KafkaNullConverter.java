@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 the original author or authors.
+ * Copyright 2019-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import org.springframework.messaging.converter.MessageConverter;
 /**
  * A {@link MessageConverter} that supports {@link KafkaNull} payloads.
  *
+ * @author Gary Russell
  * @author Aldo Sinanaj
  * @since 2.2
  */
@@ -42,12 +43,19 @@ public class KafkaNullConverter extends AbstractMessageConverter {
 	}
 
 	@Override
-	protected Object convertFromInternal(Message<?> message, Class<?> targetClass, Object conversionHint) {
+	protected boolean canConvertFrom(Message<?> message, Class<?> targetClass) {
+		return message.getPayload() instanceof KafkaNull;
+	}
+
+	@Override
+	protected Object convertFromInternal(Message<?> message, Class<?> targetClass,
+			Object conversionHint) {
 		return message.getPayload();
 	}
 
 	@Override
-	protected Object convertToInternal(Object payload, MessageHeaders headers, Object conversionHint) {
+	protected Object convertToInternal(Object payload, MessageHeaders headers,
+			Object conversionHint) {
 		return payload;
 	}
 
